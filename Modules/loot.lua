@@ -367,9 +367,9 @@ function bepgp_loot:tradeLootCallback(tradeTarget,itemColor,itemString,itemName,
     return
   end
   local bind = bepgp:itemBinding(itemString)
-  if (not bind) or (bind ~= bepgp.VARS.boe) then
-    if(not checkBossLootTradeable(itemLink)) then return end 
-  end
+  --if (not bind) or (bind ~= bepgp.VARS.boe) then
+  --  if(not checkBossLootTradeable(itemLink)) then return end 
+  --end
   local _, class = bepgp:verifyGuildMember(tradeTarget,true)
   if not class then return end
   local _,_,hexclass = bepgp:getClassData(class)

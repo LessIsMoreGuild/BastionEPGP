@@ -14,6 +14,7 @@ local data = { }
 local colorSilver = {r=199/255, g=199/255, b=207/255, a=1.0}
 local colorHidden = {r=0.0, g=0.0, b=0.0, a=0.0}
 local colorHighlight = {r=0, g=0, b=0, a=.9}
+local tradeable_pattern = string.gsub(_G.BIND_TRADE_TIME_REMAINING, "%%s", "(.+)")
 local nop = function() end
 
 local loot_indices = {
@@ -121,39 +122,6 @@ local manual_assign = function(rowFrame, cellFrame, data, cols, row, realrow, co
     end
   end
   return false
-end
-
-local ScanningTooltip = CreateFrame( "GameTooltip", "ScanningTooltip", nil, "GameTooltipTemplate" );
-ScanningTooltip:SetOwner( WorldFrame, "ANCHOR_NONE" );
-ScanningTooltip:AddFontStrings(
-  ScanningTooltip:CreateFontString( "$parentTextLeft1", nil, "GameTooltipText" ),
-  ScanningTooltip:CreateFontString( "$parentTextRight1", nil, "GameTooltipText" ) );
-
-local function check_helper(...)
-  local tradableString = BIND_TRADE_TIME_REMAINING:gsub('%%s', '(.+)');
-  for i = 1, select("#", ...) do
-      local region = select(i, ...)
-      if region and region:GetObjectType() == "FontString" then
-        local text = region:GetText() -- string or nil
-        if text and text:match(tradableString) then
-            return true;
-        end
-      end
-  end
-  return false;
-end
-
-local function checkBossLootTradeable(itemLink)
-  ScanningTooltip:ClearLines()
-  for bag = 0,4 do
-      for slot = 1,GetContainerNumSlots(bag) do
-        local bagItemLink = GetContainerItemLink(bag,slot);
-        if (bagItemLink ~= nil and bagItemLink == itemLink) then
-            ScanningTooltip:SetBagItem(bag, slot)
-        end
-      end
-  end
-  return check_helper(ScanningTooltip:GetRegions())
 end
 
 function bepgp_loot:OnEnable()
@@ -360,16 +328,15 @@ function bepgp_loot:addOrUpdateLoot(data,update)
   self:Refresh()
 end
 
-function bepgp_loot:tradeLootCallback(tradeTarget,itemColor,itemString,itemName,itemID,itemLink)
+function bepgp_loot:tradeLootCallback(tradeTarget,itemColor,itemString,itemName,itemID,itemLink,tmpTrade)
   itemCache[itemID] = true
   local price = bepgp:GetPrice(itemString, bepgp.db.profile.progress)
   if not (price) or price == 0 then
     return
   end
   local bind = bepgp:itemBinding(itemString)
-  --if (not bind) or (bind ~= bepgp.VARS.boe) then
-  --  if(not checkBossLootTradeable(itemLink)) then return end 
-  --end
+  if (not bind) then return end
+  if (bind == bepgp.VARS.bop) and (not tmpTrade) then return end
   local _, class = bepgp:verifyGuildMember(tradeTarget,true)
   if not class then return end
   local _,_,hexclass = bepgp:getClassData(class)
@@ -392,20 +359,23 @@ end
 
 function bepgp_loot:tradeLoot()
   if self._tradeTarget and self._itemLink then
-    local tradeTarget, itemLink = self._tradeTarget, self._itemLink
+    local tradeTarget, itemLink, tmpTrade = self._tradeTarget, self._itemLink, self._tmpTrade
     local itemColor, itemString, itemName, itemID = bepgp:getItemData(itemLink)
     if (itemName) then
       if itemCache[itemID] then
-        self:tradeLootCallback(tradeTarget,itemColor,itemString,itemName,itemID,itemLink)
+        self:tradeLootCallback(tradeTarget,itemColor,itemString,itemName,itemID,itemLink,tmpTrade)
+        self:tradeReset()
       else
         local item = Item:CreateFromItemID(itemID)
         item:ContinueOnItemLoad(function()
-          bepgp_loot:tradeLootCallback(tradeTarget,itemColor,itemString,itemName,itemID,itemLink)
+          bepgp_loot:tradeLootCallback(tradeTarget,itemColor,itemString,itemName,itemID,itemLink,tmpTrade)
+          self:tradeReset()
         end)
       end
     end
+  else
+    self:tradeReset()
   end
-  self:tradeReset()
 end
 function bepgp_loot:tradeUnit(unit)
   if self:raidLootAdmin() then
@@ -432,12 +402,14 @@ function bepgp_loot:tradeItemAccept()
         itemLink = GetTradePlayerItemLink(id)
         if (itemLink) then
           self._itemLink = itemLink
+          self._tmpTrade = self:bopTradeable(id)
           self:RegisterEvent("TRADE_REQUEST_CANCEL","tradeReset")
           self:RegisterEvent("TRADE_CLOSED","awaitTradeLoot")
           return
         end
       end
       self._itemLink = nil
+      self._tmpTrade = nil
     end
   end
 end
@@ -447,12 +419,21 @@ end
 function bepgp_loot:tradeReset() -- TRADE_REQUEST_CANCEL
   self._tradeTarget = nil
   self._itemLink = nil
+  self._tmpTrade = nil
   if self._awaitTradeTimer then
     self:CancelTimer(self._awaitTradeTimer)
     self._awaitTradeTimer = nil
   end
   self:UnregisterEvent("TRADE_REQUEST_CANCEL")
   self:UnregisterEvent("TRADE_CLOSED")
+end
+
+function bepgp_loot:bopTradeable(id)
+  G:SetTradePlayerItem(id)
+  if G:Find(tradeable_pattern) then
+    return true
+  end
+  return false
 end
 
 function bepgp_loot:bidCall(frame, button, context) -- context is one of "masterloot", "lootframe", "container"

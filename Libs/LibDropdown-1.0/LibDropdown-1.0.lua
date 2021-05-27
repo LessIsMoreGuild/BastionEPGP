@@ -1,5 +1,5 @@
 local MAJOR = "LibDropdown-1.0"
-local MINOR = 1
+local MINOR = 3
 
 local lib = LibStub:NewLibrary(MAJOR, MINOR)
 if not lib then return end
@@ -57,8 +57,7 @@ local openMenu
 
 local noop = lib.noop or function() end
 lib.noop = noop
-
-local new, newHash, newSet, del
+local new, del = lib.new, lib.del
 if not lib.new then
 	local list = setmetatable({}, {__mode='k'})
 	function new(...)
@@ -85,6 +84,7 @@ if not lib.new then
 	end
 	lib.new, lib.del = new, del
 end
+new, del = lib.new, lib.del
 
 -- Make the frame match the tooltip
 local function InitializeFrame(frame)
@@ -132,7 +132,7 @@ local function AcquireSlider()
 		return frame
 	end
 
-	local frame = CreateFrame("Slider", nil, UIParent)
+	local frame = CreateFrame("Slider", nil, UIParent, BackdropTemplateMixin and "BackdropTemplate")
 	frame:SetWidth(10)
 	frame:SetHeight(150)
 	frame:SetOrientation("VERTICAL")
@@ -311,7 +311,7 @@ end
 -- Pool methods
 local frameCount = 0
 function NewDropdownFrame()
-	local frame = CreateFrame("Frame", "LibDropdownFrame" .. frameCount, UIParent)
+	local frame = CreateFrame("Frame", "LibDropdownFrame" .. frameCount, UIParent, BackdropTemplateMixin and "BackdropTemplate")
 	frameCount = frameCount + 1
 	frame:SetPoint("CENTER", UIParent, "CENTER")
 	frame:SetWidth(10)
